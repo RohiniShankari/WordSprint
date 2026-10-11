@@ -27,6 +27,10 @@ public class Game {
 
     private int turnTime;
 
+    private int gameDuration; // Duration in seconds
+    private LocalDateTime gameStartedAt;
+    private LocalDateTime gameEndsAt;
+    private String hostUsername;
     public Game() {
     }
 
@@ -88,5 +92,39 @@ public class Game {
 
     public void setTurnTime(int turnTime) {
         this.turnTime = turnTime;
+    }
+    
+    public int getGameDuration() {
+        return gameDuration;
+    }
+    
+    
+
+    public void setGameDuration(int gameDuration) {
+        this.gameDuration = gameDuration;
+    }
+
+    public LocalDateTime getGameStartedAt() {
+        return gameStartedAt;
+    }
+
+    public void setGameStartedAt(LocalDateTime gameStartedAt) {
+        this.gameStartedAt = gameStartedAt;
+    }
+
+    public LocalDateTime getGameEndsAt() {
+        return gameEndsAt;
+    }
+
+    public void setGameEndsAt(LocalDateTime gameEndsAt) {
+        this.gameEndsAt = gameEndsAt;
+    }
+    
+    public String getHostUsername() {
+        return hostUsername;
+    }
+
+    public void setHostUsername(String hostUsername) {
+        this.hostUsername = hostUsername;
     }
 }

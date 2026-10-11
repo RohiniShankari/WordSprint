@@ -19,6 +19,8 @@ import com.rohini.wordchain.repository.PlayerRepository;
 import com.rohini.wordchain.dto.GameStatusResponse;
 import com.rohini.wordchain.dto.PlayerResponse;
 
+
+
 @Service
 public class GameService {
 
@@ -26,32 +28,46 @@ public class GameService {
     private final PlayerRepository playerRepository;
     private final GuessRepository guessRepository;
     private final WordValidator wordValidator;
+    private final GameUpdateService gameUpdateService;
     
     public GameService(GameRepository gameRepository,
             PlayerRepository playerRepository,
             GuessRepository guessRepository,
-            WordValidator wordValidator) {
+            WordValidator wordValidator,
+            GameUpdateService gameUpdateService) {
 			
 			this.gameRepository = gameRepository;
 			this.playerRepository = playerRepository;
 			this.guessRepository = guessRepository;
 			this.wordValidator = wordValidator;
+			this.gameUpdateService=gameUpdateService;
 			}
 
-    public Game createGame() {
 
-        Game game = new Game();
-
-        game.setRoomCode(UUID.randomUUID().toString().substring(0, 6).toUpperCase());
-        game.setGameMode("MULTIPLAYER");
-        game.setStatus("WAITING");
-        game.setCurrentWord("");
-        game.setCurrentPlayer(1);
-        game.setTurnTime(15);
- 
-        game.setTurnStartedAt(LocalDateTime.now());
-        return gameRepository.save(game);
-    }
+		
+		public Game createGame(int durationMinutes) {
+		
+		    if (durationMinutes != 2 &&
+		        durationMinutes != 5 &&
+		        durationMinutes != 10) {
+		        throw new RuntimeException(
+		                "Game duration must be 2, 5, or 10 minutes");
+		    }
+		
+		    Game game = new Game();
+		
+		    game.setRoomCode(
+		            UUID.randomUUID().toString().substring(0, 6).toUpperCase());
+		    game.setGameMode("MULTIPLAYER");
+		    game.setStatus("WAITING");
+		    game.setCurrentWord("");
+		    game.setCurrentPlayer(1);
+		    game.setTurnTime(15);
+		
+		    game.setGameDuration(durationMinutes * 60);
+		
+		    return gameRepository.save(game);
+		}
 
     public Player joinGame(String roomCode, String username) {
 
@@ -84,12 +100,15 @@ public class GameService {
         return playerRepository.save(player);
     }
 
-    public Game startGame(String roomCode) {
+    public Game startGame(String roomCode,String username) {
 
         Game game = gameRepository.findByRoomCode(roomCode);
 
         if (game == null) {
             throw new RuntimeException("Game not found");
+        }
+        if (!username.equals(game.getHostUsername())) {
+            throw new RuntimeException("Only the host can start the game");
         }
         if (!game.getStatus().equals("WAITING")) {
             throw new RuntimeException("Game has already started");
@@ -101,9 +120,14 @@ public class GameService {
             throw new RuntimeException("At least 2 players are required");
         }
         
+        LocalDateTime now = LocalDateTime.now();
+
         game.setStatus("IN_PROGRESS");
         game.setCurrentWord("");
-        game.setTurnStartedAt(LocalDateTime.now());
+        game.setGameStartedAt(now);
+        game.setGameEndsAt(now.plusSeconds(game.getGameDuration()));
+        game.setTurnStartedAt(now);
+
         return gameRepository.save(game);
     }
 
@@ -119,6 +143,15 @@ public class GameService {
             throw new RuntimeException("Game is not in progress");
         }
 
+        if (game.getGameEndsAt() != null &&
+                !LocalDateTime.now().isBefore(game.getGameEndsAt())) {
+
+            game.setStatus("FINISHED");
+            gameRepository.save(game);
+
+            throw new RuntimeException("The game has ended");
+        }
+        
         Player player = playerRepository.findById(playerId).orElse(null);
 
         if (player == null) {
@@ -207,6 +240,11 @@ public class GameService {
         game.setTurnStartedAt(LocalDateTime.now());
         gameRepository.save(game);
 
+        gameUpdateService.broadcastGameStatus(
+                roomCode,
+                getGameStatus(roomCode)
+        );
+        
         return guess;
     }
     public List<GuessResponse> getGameHistory(String roomCode) {
@@ -253,13 +291,35 @@ public class GameService {
 	            ))
 	            .toList();
 	
+	    String winner = null;
+	    boolean draw = false;
+
+	    if ("FINISHED".equals(game.getStatus()) && !players.isEmpty()) {
+
+	        int highestScore = players.stream()
+	                .mapToInt(Player::getScore)
+	                .max()
+	                .orElse(0);
+
+	        List<Player> topPlayers = players.stream()
+	                .filter(player -> player.getScore() == highestScore)
+	                .toList();
+
+	        if (topPlayers.size() == 1) {
+	            winner = topPlayers.get(0).getUsername();
+	        } else {
+	            draw = true;
+	        }
+	    }
 	    return new GameStatusResponse(
 	            game.getRoomCode(),
 	            game.getStatus(),
 	            game.getCurrentWord(),
 	            game.getCurrentPlayer(),
 	            getRemainingTime(roomCode),
-	            playerResponses
+	            playerResponses,
+	            winner,
+	            draw
 	    );
 	}
 
@@ -305,4 +365,46 @@ public class GameService {
             return 25;
         }
     }
+    
+		
+		public Player getPlayerByUsername(String roomCode, String username) {
+		    Game game = gameRepository.findByRoomCode(roomCode);
+		
+		    if (game == null) {
+		        throw new RuntimeException("Game not found");
+		    }
+		
+		    return playerRepository.findByGameIdAndUsername(
+		            game.getId(), username
+		    ).orElseThrow(() ->
+		            new RuntimeException("You have not joined this game"));
+		}
+
+		public Game saveGame(Game game) {
+		    return gameRepository.save(game);
+		}
+
+
+	public void checkPlayerInGame(String roomCode, String username) {
+	    Game game = gameRepository.findByRoomCode(roomCode);
+	
+	    if (game == null) {
+	        throw new RuntimeException("Game not found");
+	    }
+	
+	    playerRepository.findByGameIdAndUsername(game.getId(), username)
+	            .orElseThrow(() ->
+	                    new RuntimeException("You have not joined this game"));
+	}
+	public Game getGameByRoomCode(String roomCode) {
+	    Game game = gameRepository.findByRoomCode(roomCode);
+
+	    if (game == null) {
+	        throw new RuntimeException("Game not found");
+	    }
+
+	    return game;
+	}
+
+
 }

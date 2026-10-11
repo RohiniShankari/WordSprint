@@ -12,15 +12,21 @@ public class GameStatusResponse {
     private int remainingTime;
     private List<PlayerResponse> players;
 
+    private String winner;
+    private boolean draw;
+    
     public GameStatusResponse(String roomCode, String status,
             String currentWord, int currentPlayer, int remainingTime,
-            List<PlayerResponse> players) {
+            List<PlayerResponse> players,String winner,boolean draw) {
         this.roomCode = roomCode;
         this.status = status;
         this.currentWord = currentWord;
         this.currentPlayer = currentPlayer;
         this.remainingTime = remainingTime;
         this.players = players;
+        this.winner = winner;
+        this.draw = draw;
+        
     }
 
     public String getRoomCode() { return roomCode; }
@@ -29,4 +35,11 @@ public class GameStatusResponse {
     public int getCurrentPlayer() { return currentPlayer; }
     public int getRemainingTime() { return remainingTime; }
     public List<PlayerResponse> getPlayers() { return players; }
+    public String getWinner() {
+        return winner;
+    }
+
+    public boolean isDraw() {
+        return draw;
+    }
 }

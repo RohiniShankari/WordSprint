@@ -18,21 +18,42 @@ public class GameScheduler {
 
     private final GameRepository gameRepository;
     private final PlayerRepository playerRepository;
+    private final GameService gameService;
+    private final GameUpdateService gameUpdateService;
 
     public GameScheduler(GameRepository gameRepository,
-                         PlayerRepository playerRepository) {
+                         PlayerRepository playerRepository,
+                         GameService gameService,
+                         GameUpdateService gameUpdateService) {
         this.gameRepository = gameRepository;
         this.playerRepository = playerRepository;
+        this.gameService = gameService;
+        this.gameUpdateService = gameUpdateService;
     }
 
     @Scheduled(fixedRate = 1000)
     public void checkTurnTimeouts() {
-    	System.out.println("Scheduler is running");
+        System.out.println("Scheduler is running");
+
         List<Game> games = gameRepository.findAll();
 
         for (Game game : games) {
 
             if (!"IN_PROGRESS".equals(game.getStatus())) {
+                continue;
+            }
+
+            if (game.getGameEndsAt() != null &&
+                    !LocalDateTime.now().isBefore(game.getGameEndsAt())) {
+
+                game.setStatus("FINISHED");
+                gameRepository.save(game);
+
+                gameUpdateService.broadcastGameStatus(
+                        game.getRoomCode(),
+                        gameService.getGameStatus(game.getRoomCode())
+                );
+
                 continue;
             }
 
@@ -64,6 +85,11 @@ public class GameScheduler {
                 game.setTurnStartedAt(LocalDateTime.now());
 
                 gameRepository.save(game);
+
+                gameUpdateService.broadcastGameStatus(
+                        game.getRoomCode(),
+                        gameService.getGameStatus(game.getRoomCode())
+                );
             }
         }
     }
